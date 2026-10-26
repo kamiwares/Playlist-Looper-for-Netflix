@@ -227,45 +227,66 @@
   }
 
   // ---------- Autostart (#autostart) ----------
-  // Marker set by autostart.js; 'clicked' means the profile was already picked
-  // (Netflix may have reloaded). Cleared only when the loop starts.
+  // Marker set by autostart.js; 'clicked' means we already clicked the profile
+  // (Netflix may have reloaded since). Cleared only when the loop starts.
   const AUTOSTART_KEY = 'nlp-autostart';
-  const PROFILE_WAIT_MS = 6000; // wait for "Who's watching?"
-  const AFTER_PROFILE_MS = 2500; // let Netflix switch profiles
+  // "Who's watching?" screen; data-uia test IDs are steadier than Netflix's CSS classes.
+  const PROFILE_GATE_SELECTOR = '[data-uia="profile-selector"]';
+  const PROFILE_TILE_SELECTOR = '[data-uia^="profile-selector+tile"]';
+  const GATE_WAIT_MS = 8000; // how long the gate may take to appear
+  const SETTLE_MS = 1500; // after the gate closes, let Netflix switch profiles
+  const PIN_WAIT_MS = 60000; // longest wait for a profile PIN
   const autostartAt = Date.now();
-  let profileClickedAt = 0;
+  let sawGate = false;
+  let gateClosedAt = 0;
 
   function isVisible(el) {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
   }
 
-  // Match visible elements by name rather than Netflix CSS classes (they change often);
-  // isVisible() skips the hidden account menu.
-  function findProfile(name) {
+  function profileGate() {
+    const gate = document.querySelector(PROFILE_GATE_SELECTOR);
+    return gate && isVisible(gate) ? gate : null;
+  }
+
+  // Exact, case-insensitive match, so "Ann" never picks "Anna".
+  function findProfileTile(gate, name) {
     const target = name.toLocaleLowerCase();
-    for (const el of document.querySelectorAll('a, button, [role="link"], [role="button"], span, p')) {
-      if (el.children.length > 2 || el.textContent.trim().toLocaleLowerCase() !== target || !isVisible(el)) continue;
-      return el.closest('a, button, [role="link"], [role="button"], [tabindex]') || el;
-    }
-    return null;
+    return [...gate.querySelectorAll(PROFILE_TILE_SELECTOR)]
+      .find((tile) => tile.textContent.trim().toLocaleLowerCase() === target) || null;
+  }
+
+  // A visible input right after picking a profile is most likely its PIN prompt.
+  function pinPromptOpen() {
+    return [...document.querySelectorAll('input')].some((el) => el.type !== 'hidden' && isVisible(el));
   }
 
   function handleAutostart() {
     const flag = sessionStorage.getItem(AUTOSTART_KEY);
     if (!flag || !settingsLoaded) return;
-    const name = String(settings.autoProfile || '').trim();
-    if (name && flag !== 'clicked') {
-      const el = findProfile(name);
-      if (el) {
-        el.click();
+
+    const gate = profileGate();
+    if (gate) {
+      sawGate = true;
+      gateClosedAt = 0;
+      const name = String(settings.autoProfile || '').trim();
+      const tile = name && flag !== 'clicked' ? findProfileTile(gate, name) : null;
+      if (tile) {
+        tile.click();
         sessionStorage.setItem(AUTOSTART_KEY, 'clicked');
-        profileClickedAt = Date.now();
-        return;
       }
-      if (Date.now() - autostartAt < PROFILE_WAIT_MS) return;
+      return; // without a match, wait for the user to pick a profile
     }
-    if (profileClickedAt && Date.now() - profileClickedAt < AFTER_PROFILE_MS) return;
+
+    if (sawGate || flag === 'clicked') {
+      gateClosedAt ||= Date.now();
+      const since = Date.now() - gateClosedAt;
+      if (since < SETTLE_MS || (pinPromptOpen() && since < PIN_WAIT_MS)) return;
+    } else if (Date.now() - autostartAt < GATE_WAIT_MS) {
+      return; // the gate may still be on its way
+    }
+
     sessionStorage.removeItem(AUTOSTART_KEY);
     send({ type: 'START', here: true });
   }
