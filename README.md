@@ -115,7 +115,7 @@ Open `https://www.netflix.com/#autostart` and the loop starts right away in that
 
 To start the loop together with Windows, put a shortcut to that link in your Startup folder (press <kbd>Win</kbd>+<kbd>R</kbd>, type `shell:startup`, then *New → Shortcut* and paste the link). It opens in your default browser, so Chrome has to be the default browser with the extension installed in the profile it opens.
 
-If your Netflix account has several profiles, Netflix may ask *Who's watching?* first. To skip it, enter the profile name under **Settings → Netflix profile for autostart**: the extension then clicks that profile on its own and starts the loop. Leave the field empty to pick the profile yourself. PIN-locked profiles still ask for the PIN.
+If your Netflix account has several profiles, Netflix may ask *Who's watching?* first. To skip it, enter the profile name under **Settings → Netflix profile for autostart** exactly as Netflix shows it (case doesn't matter): the extension clicks that profile and starts the loop. Leave the field empty to pick the profile yourself; the loop starts right after you pick. PIN-locked profiles still ask for the PIN, and the loop waits until you've entered it.
 
 ## How it works
 
